@@ -1,0 +1,34 @@
+# Secrets - never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.json
+
+# n8n local data
+.n8n/
+n8n_data/
+postgres_data/
+
+# Exported workflows containing resolved credential data
+# (n8n exports with --backup include credential stubs; keep those out)
+workflows/*.credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node (if tooling is added later)
+node_modules/

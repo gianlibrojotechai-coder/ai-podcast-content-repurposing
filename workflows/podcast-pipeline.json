@@ -1,0 +1,1386 @@
+{
+  "name": "Podcast to Content Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "feedUrl": "https://feeds.simplecast.com/54nAGcIl"
+      },
+      "id": "ecb6b18e-f77a-455e-b80f-ea3998fd2c9d",
+      "name": "New Podcast Episode",
+      "type": "n8n-nodes-base.rssFeedReadTrigger",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n-podcast",
+              "name": "podcastName",
+              "value": "Placeholder Podcast",
+              "type": "string"
+            },
+            {
+              "id": "n-title",
+              "name": "episodeTitle",
+              "value": "={{ $json.title ?? \"Untitled Episode\" }}",
+              "type": "string"
+            },
+            {
+              "id": "n-desc",
+              "name": "episodeDescription",
+              "value": "={{ ($json.contentSnippet ?? $json.content ?? \"\").toString().slice(0, 4000) }}",
+              "type": "string"
+            },
+            {
+              "id": "n-pub",
+              "name": "publishDate",
+              "value": "={{ $json.isoDate ?? $json.pubDate ?? $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "n-audio",
+              "name": "audioUrl",
+              "value": "={{ $json.enclosure?.url ?? $json.enclosure_url ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "n-epurl",
+              "name": "episodeUrl",
+              "value": "={{ $json.link ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "n-guid",
+              "name": "episodeGuid",
+              "value": "={{ $json.guid ?? $json.link ?? $execution.id }}",
+              "type": "string"
+            },
+            {
+              "id": "n-fmt",
+              "name": "audioFormat",
+              "value": "={{ ($json.enclosure?.url ?? \"\").endsWith(\".m4a\") ? \"m4a\" : \"mp3\" }}",
+              "type": "string"
+            },
+            {
+              "id": "n-start",
+              "name": "startedAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "62beaa31-0635-416a-b790-2025c3490bbf",
+      "name": "Normalize Episode",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -176,
+        320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "5c6efc34-6d4a-4cc2-b45c-9d9b69457707",
+      "name": "Manual Test Run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s-title",
+              "name": "title",
+              "value": "Ep 42 - Scaling Automation",
+              "type": "string"
+            },
+            {
+              "id": "s-link",
+              "name": "link",
+              "value": "https://example.com/ep42",
+              "type": "string"
+            },
+            {
+              "id": "s-iso",
+              "name": "isoDate",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "s-guid",
+              "name": "guid",
+              "value": "={{ \"manual-test-\" + $now.toMillis() }}",
+              "type": "string"
+            },
+            {
+              "id": "s-snip",
+              "name": "contentSnippet",
+              "value": "Manual test run of the podcast content pipeline.",
+              "type": "string"
+            },
+            {
+              "id": "s-enc",
+              "name": "enclosure",
+              "value": "={{ { \"url\": \"https://assembly.ai/sports_injuries.mp3\", \"type\": \"audio/mpeg\" } }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9b9cfca5-aa65-4268-a18a-cbc2583964fd",
+      "name": "Load Sample Episode",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -400,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-audio",
+              "leftValue": "={{ $json.audioUrl }}",
+              "rightValue": "^https?://",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "has-title",
+              "leftValue": "={{ $json.episodeTitle }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "9b5f90f3-8a61-4fc1-9be2-7c20a0a5951a",
+      "name": "Episode Has Audio?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        48,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.assemblyai.com/v2/transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ audio_url: $json.audioUrl, speaker_labels: true, auto_chapters: true, punctuate: true, format_text: true, language_detection: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "389c12c7-8af7-45f6-87e7-44c6961189ca",
+      "name": "Submit Transcription Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        288,
+        208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REPLACE_WITH_YOUR_SLACK_CHANNEL_ID",
+          "cachedResultName": "contentrepurposing"
+        },
+        "text": "=:warning: *Episode skipped - incomplete RSS data*\n\n*Title:* {{ $json.episodeTitle || \"(missing)\" }}\n*Audio URL:* {{ $json.audioUrl || \"(missing or not http)\" }}\n*Episode URL:* {{ $json.episodeUrl || \"(missing)\" }}\n\nNo transcription was attempted. Check the feed entry for a valid enclosure.",
+        "otherOptions": {
+          "includeLinkToWorkflow": true,
+          "mrkdwn": true
+        }
+      },
+      "id": "9dbc89f2-99d7-4f34-af7f-bc3076858414",
+      "name": "Alert Invalid Episode",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        288,
+        560
+      ],
+      "webhookId": "676b2468-b805-4bae-9b6a-b08e6fe959b8",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 45
+      },
+      "id": "886e6ab4-aa31-4525-98d2-4fa7ac7de786",
+      "name": "Wait For Transcription",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        512,
+        208
+      ],
+      "webhookId": "9f575b0c-6a3d-409f-98c4-894801171b84"
+    },
+    {
+      "parameters": {
+        "url": "={{ \"https://api.assemblyai.com/v2/transcript/\" + $(\"Submit Transcription Job\").item.json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "2456c360-b316-483d-92f7-583bff1d665e",
+      "name": "Poll Transcription Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        720,
+        208
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c-done",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "completed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c-err",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "error",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "still processing"
+        }
+      },
+      "id": "c9a3d240-23c4-4f84-b1f2-fc63b4ff4414",
+      "name": "Transcription State?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        944,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "t-text",
+              "name": "transcript",
+              "value": "={{ $json.text ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "t-words",
+              "name": "wordCount",
+              "value": "={{ ($json.text ?? \"\").split(/\\s+/).filter(w => w).length }}",
+              "type": "number"
+            },
+            {
+              "id": "t-conf",
+              "name": "confidence",
+              "value": "={{ Math.round(($json.confidence ?? 0) * 1000) / 1000 }}",
+              "type": "number"
+            },
+            {
+              "id": "t-dur",
+              "name": "durationMin",
+              "value": "={{ Math.round(($json.audio_duration ?? 0) / 60) }}",
+              "type": "number"
+            },
+            {
+              "id": "t-spk",
+              "name": "speakerCount",
+              "value": "={{ [...new Set(($json.utterances ?? []).map(u => u.speaker))].length }}",
+              "type": "number"
+            },
+            {
+              "id": "t-chap",
+              "name": "chapterOutline",
+              "value": "={{ ($json.chapters ?? []).map(c => Math.floor(c.start/60000).toString().padStart(2,\"0\") + \":\" + Math.floor((c.start%60000)/1000).toString().padStart(2,\"0\") + \" - \" + c.headline + \" - \" + c.gist).join(\"\\n\") }}",
+              "type": "string"
+            },
+            {
+              "id": "t-id",
+              "name": "transcriptId",
+              "value": "={{ $json.id ?? \"\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "724e45ef-b857-40a2-8bab-14bde85cf895",
+      "name": "Extract Transcript Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1184,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Podcast: {{ $(\"Normalize Episode\").item.json.podcastName }}\nEpisode: {{ $(\"Normalize Episode\").item.json.episodeTitle }}\nDuration: {{ $json.durationMin }} minutes\nSpeakers detected: {{ $json.speakerCount }}\n\nTIMESTAMPED CHAPTER OUTLINE:\n{{ $json.chapterOutline }}\n\nFULL TRANSCRIPT:\n{{ $json.transcript }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a senior podcast producer writing show materials that will be published without further editing.\n\nRules:\n- Work only from the transcript. Never invent facts, names, statistics, or resources that are not stated.\n- If the transcript does not mention any resources or action items, return an empty array rather than fabricating entries.\n- summary_250 must be flowing prose of 240-260 words, written for a listener deciding whether to press play. No bullet points, no meta-commentary such as in this episode.\n- executive_summary must be exactly 5 entries, each a complete sentence carrying a distinct substantive insight. Not topic labels.\n- show_notes must be markdown using the supplied chapter timestamps in MM:SS format, one bolded timestamp per section followed by 1-2 sentences. Only use timestamps present in the chapter outline.\n- key_topics: 4-8 short noun phrases suitable as database tags. Lowercase unless a proper noun.\n- resources_mentioned: books, tools, people, companies, or URLs explicitly referenced. Include enough context to identify each one.\n- action_items: concrete things a listener could do, phrased as imperatives.\n- key_takeaways: the durable lessons, distinct from the action items."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "539d2ab9-a7db-4abf-a692-45ee193fd111",
+      "name": "Generate Summaries and Show Notes",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1408,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.4",
+          "cachedResultName": "gpt-5.4"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.7,
+          "timeout": 180000,
+          "maxRetries": 3
+        }
+      },
+      "id": "c0f2f877-efee-4482-b0c7-8dfa03af9460",
+      "name": "GPT 5.4 Content Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1408,
+        640
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\"summary_250\":\"A 250 word prose summary of the episode.\",\"executive_summary\":[\"Point one\",\"Point two\",\"Point three\",\"Point four\",\"Point five\"],\"show_notes\":\"## Show Notes\",\"key_topics\":[\"automation\",\"scaling\"],\"resources_mentioned\":[\"Book: Example Title by Author\"],\"action_items\":[\"Audit your current workflow stack\"],\"key_takeaways\":[\"Automation compounds when documented\"]}"
+      },
+      "id": "5310e379-b968-47dc-84f4-21d64806e0b2",
+      "name": "Summary Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1568,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Episode: {{ $(\"Normalize Episode\").item.json.episodeTitle }}\nEpisode link: {{ $(\"Normalize Episode\").item.json.episodeUrl }}\n\nEPISODE SUMMARY:\n{{ $(\"Generate Summaries and Show Notes\").item.json.output.summary_250 }}\n\nFULL TRANSCRIPT:\n{{ $(\"Extract Transcript Data\").item.json.transcript }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a social media strategist. Each platform gets genuinely native content, never the same paragraph reworded. Quote only words actually spoken in the transcript.\n\nlinkedin_post: 1200-1800 characters. Open with a specific claim or counterintuitive observation from the episode, not a question. Short paragraphs separated by blank lines. Professional but not stiff. End with one open question. No more than 3 hashtags, on the final line.\n\nx_thread: 5-8 tweets, each under 280 characters including the numbering prefix. Tweet 1 is a standalone hook that earns the click without clickbait. Each later tweet delivers one concrete idea and can stand alone. Final tweet links to the episode. No hashtags except at most one in the last tweet.\n\nfacebook_post: 400-700 characters. Warmer and more conversational than LinkedIn. Story-led opening. One clear call to action. At most 2 emoji.\n\ninstagram_caption: 800-1500 characters. Hook in the first 125 characters because the rest is truncated in feed. Line breaks between thoughts. Ends with 8-12 relevant hashtags on their own lines.\n\npull_quotes: exactly 10 verbatim or lightly tightened quotes from the transcript, each 8-25 words, each strong enough to stand alone on a graphic. No speaker attribution inside the string. Prefer quotes containing a concrete image, number, or contrast."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "1ce63c5d-cd6b-4184-9092-6fd11429a016",
+      "name": "Generate Social Content",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1696,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\"linkedin_post\":\"Long form LinkedIn post text.\",\"x_thread\":[\"1/ Hook tweet\",\"2/ Second tweet\"],\"facebook_post\":\"Conversational Facebook post.\",\"instagram_caption\":\"Caption with line breaks and hashtags.\",\"pull_quotes\":[\"Quote one\",\"Quote two\"]}"
+      },
+      "id": "f7bf0ce6-e5f1-42d2-9985-16474039b94a",
+      "name": "Social Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1728,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Episode: {{ $(\"Normalize Episode\").item.json.episodeTitle }}\nOriginal description: {{ $(\"Normalize Episode\").item.json.episodeDescription }}\n\nSHOW NOTES:\n{{ $(\"Generate Summaries and Show Notes\").item.json.output.show_notes }}\n\nKEY TAKEAWAYS:\n{{ $(\"Generate Summaries and Show Notes\").item.json.output.key_takeaways }}\n\nFULL TRANSCRIPT:\n{{ $(\"Extract Transcript Data\").item.json.transcript }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are an SEO content strategist and long-form writer. Everything you produce must be grounded in the transcript.\n\nblog_title: 50-65 characters, front-loads the primary keyword, reads like a human wrote it.\n\nblog_draft: 900-1400 words of markdown. Structure: a 2-3 paragraph introduction that establishes the problem before naming the solution; 4-6 H2 sections with descriptive keyword-aware headings; short paragraphs of 2-4 sentences; at least one bulleted list where the content genuinely enumerates; a conclusion that resolves the introduction and points to the episode. Weave the primary keyword naturally into the intro, one H2, and the conclusion. Never keyword-stuff. Do not include the title as an H1, start at H2.\n\nprimary_keywords: 2-4 head terms this post could realistically rank for.\nsecondary_keywords: 5-10 long-tail supporting phrases.\ntags: 5-8 short taxonomy labels for a CMS.\n\nseo_title: an improved podcast episode title, 45-60 characters, more searchable than the original while staying faithful to the content.\nurl_slug: lowercase, hyphen-separated, 3-6 words, no stop words, no dates.\nmeta_description: 140-158 characters, includes the primary keyword, written as a promise rather than a summary.\nrecommended_categories: 2-3 standard podcast directory categories such as Technology, Business, Education, Health and Fitness."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "95b689a9-a298-4008-9748-fee0b954dd00",
+      "name": "Generate SEO and Blog",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1984,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\"blog_title\":\"How Automation Compounds\",\"blog_draft\":\"## Introduction\",\"primary_keywords\":[\"workflow automation\"],\"secondary_keywords\":[\"n8n workflows\"],\"tags\":[\"automation\"],\"seo_title\":\"Scaling Automation Without Breaking It\",\"url_slug\":\"scaling-automation-without-breaking-it\",\"meta_description\":\"A 150 character description.\",\"recommended_categories\":[\"Technology\"]}"
+      },
+      "id": "50c8a932-67d6-4f7d-9e48-0272c2c750c6",
+      "name": "SEO Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1888,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a-sum",
+              "name": "summary",
+              "value": "={{ ($(\"Generate Summaries and Show Notes\").item.json.output.summary_250 ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-exec",
+              "name": "executiveSummary",
+              "value": "={{ ($(\"Generate Summaries and Show Notes\").item.json.output.executive_summary ?? []).map((p, i) => (i+1) + \". \" + p).join(\"\\n\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-notes",
+              "name": "showNotes",
+              "value": "={{ $(\"Generate Summaries and Show Notes\").item.json.output.show_notes ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a-topics",
+              "name": "keyTopics",
+              "value": "={{ ($(\"Generate Summaries and Show Notes\").item.json.output.key_topics ?? []).slice(0, 8).join(\",\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-res",
+              "name": "resources",
+              "value": "={{ ($(\"Generate Summaries and Show Notes\").item.json.output.resources_mentioned ?? []).map(r => \"- \" + r).join(\"\\n\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-act",
+              "name": "actionItems",
+              "value": "={{ ($(\"Generate Summaries and Show Notes\").item.json.output.action_items ?? []).map(r => \"- \" + r).join(\"\\n\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-take",
+              "name": "takeaways",
+              "value": "={{ ($(\"Generate Summaries and Show Notes\").item.json.output.key_takeaways ?? []).map(r => \"- \" + r).join(\"\\n\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-li",
+              "name": "linkedinPost",
+              "value": "={{ ($(\"Generate Social Content\").item.json.output.linkedin_post ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-x",
+              "name": "xThread",
+              "value": "={{ ($(\"Generate Social Content\").item.json.output.x_thread ?? []).join(\"\\n\\n\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-fb",
+              "name": "facebookPost",
+              "value": "={{ ($(\"Generate Social Content\").item.json.output.facebook_post ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-ig",
+              "name": "instagramCaption",
+              "value": "={{ ($(\"Generate Social Content\").item.json.output.instagram_caption ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-qt",
+              "name": "pullQuotes",
+              "value": "={{ ($(\"Generate Social Content\").item.json.output.pull_quotes ?? []).map((q, i) => (i+1) + \". \" + q).join(\"\\n\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-btitle",
+              "name": "blogTitle",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.blog_title ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-bdraft",
+              "name": "blogDraft",
+              "value": "={{ $(\"Generate SEO and Blog\").item.json.output.blog_draft ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a-pk",
+              "name": "primaryKeywords",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.primary_keywords ?? []).slice(0, 6).join(\",\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-sk",
+              "name": "secondaryKeywords",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.secondary_keywords ?? []).slice(0, 10).join(\",\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-tags",
+              "name": "tags",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.tags ?? []).slice(0, 8).join(\",\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-cats",
+              "name": "categories",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.recommended_categories ?? []).slice(0, 3).join(\",\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a-seo",
+              "name": "seoTitle",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.seo_title ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-slug",
+              "name": "urlSlug",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.url_slug ?? \"\").slice(0, 300) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-meta",
+              "name": "metaDescription",
+              "value": "={{ ($(\"Generate SEO and Blog\").item.json.output.meta_description ?? \"\").slice(0, 1900) }}",
+              "type": "string"
+            },
+            {
+              "id": "a-secs",
+              "name": "processingSeconds",
+              "value": "={{ Math.round($now.diff($(\"Normalize Episode\").item.json.startedAt.toDateTime()).as(\"seconds\")) }}",
+              "type": "number"
+            },
+            {
+              "id": "a-status",
+              "name": "pipelineStatus",
+              "value": "Complete",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "119e9a9f-84f6-4007-9f7e-f336d760be6c",
+      "name": "Assemble Notion Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2336,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "REPLACE_WITH_YOUR_NOTION_DATABASE_ID",
+          "cachedResultName": "Podcast Content Pipeline"
+        },
+        "title": "={{ $(\"Normalize Episode\").item.json.episodeTitle }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Status|select",
+              "type": "select",
+              "selectValue": "={{ $json.pipelineStatus }}"
+            },
+            {
+              "key": "Podcast|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $(\"Normalize Episode\").item.json.podcastName }}"
+            },
+            {
+              "key": "Episode GUID|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $(\"Normalize Episode\").item.json.episodeGuid }}"
+            },
+            {
+              "key": "Publish Date|date",
+              "type": "date",
+              "includeTime": false,
+              "date": "={{ $(\"Normalize Episode\").item.json.publishDate }}"
+            },
+            {
+              "key": "Episode URL|url",
+              "type": "url",
+              "urlValue": "={{ $(\"Normalize Episode\").item.json.episodeUrl }}"
+            },
+            {
+              "key": "Audio URL|url",
+              "type": "url",
+              "urlValue": "={{ $(\"Normalize Episode\").item.json.audioUrl }}"
+            },
+            {
+              "key": "Duration Min|number",
+              "type": "number",
+              "numberValue": "={{ $(\"Extract Transcript Data\").item.json.durationMin }}"
+            },
+            {
+              "key": "Transcript Words|number",
+              "type": "number",
+              "numberValue": "={{ $(\"Extract Transcript Data\").item.json.wordCount }}"
+            },
+            {
+              "key": "Speaker Count|number",
+              "type": "number",
+              "numberValue": "={{ $(\"Extract Transcript Data\").item.json.speakerCount }}"
+            },
+            {
+              "key": "Confidence|number",
+              "type": "number",
+              "numberValue": "={{ $(\"Extract Transcript Data\").item.json.confidence }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.summary }}"
+            },
+            {
+              "key": "Executive Summary|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.executiveSummary }}"
+            },
+            {
+              "key": "Key Topics|multi_select",
+              "type": "multi_select",
+              "multiSelectValue": "={{ $json.keyTopics.split(\",\").filter(t => t) }}"
+            },
+            {
+              "key": "LinkedIn Post|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.linkedinPost }}"
+            },
+            {
+              "key": "X Thread|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.xThread }}"
+            },
+            {
+              "key": "Facebook Post|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.facebookPost }}"
+            },
+            {
+              "key": "Instagram Caption|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.instagramCaption }}"
+            },
+            {
+              "key": "Blog Title|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.blogTitle }}"
+            },
+            {
+              "key": "SEO Title|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.seoTitle }}"
+            },
+            {
+              "key": "URL Slug|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.urlSlug }}"
+            },
+            {
+              "key": "Meta Description|rich_text",
+              "type": "rich_text",
+              "textContent": "={{ $json.metaDescription }}"
+            },
+            {
+              "key": "Primary Keywords|multi_select",
+              "type": "multi_select",
+              "multiSelectValue": "={{ $json.primaryKeywords.split(\",\").filter(t => t) }}"
+            },
+            {
+              "key": "Secondary Keywords|multi_select",
+              "type": "multi_select",
+              "multiSelectValue": "={{ $json.secondaryKeywords.split(\",\").filter(t => t) }}"
+            },
+            {
+              "key": "Categories|multi_select",
+              "type": "multi_select",
+              "multiSelectValue": "={{ $json.categories.split(\",\").filter(t => t) }}"
+            },
+            {
+              "key": "Tags|multi_select",
+              "type": "multi_select",
+              "multiSelectValue": "={{ $json.tags.split(\",\").filter(t => t) }}"
+            },
+            {
+              "key": "Processing Seconds|number",
+              "type": "number",
+              "numberValue": "={{ $json.processingSeconds }}"
+            },
+            {
+              "key": "Processed At|date",
+              "type": "date",
+              "date": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "type": "heading_2",
+              "textContent": "Show Notes"
+            },
+            {
+              "textContent": "={{ $json.showNotes.slice(0, 1900) }}"
+            },
+            {
+              "textContent": "={{ $json.showNotes.slice(1900, 3800) }}"
+            },
+            {
+              "type": "heading_2",
+              "textContent": "Key Takeaways"
+            },
+            {
+              "textContent": "={{ $json.takeaways.slice(0, 1900) }}"
+            },
+            {
+              "type": "heading_2",
+              "textContent": "Action Items"
+            },
+            {
+              "textContent": "={{ $json.actionItems.slice(0, 1900) }}"
+            },
+            {
+              "type": "heading_2",
+              "textContent": "Resources Mentioned"
+            },
+            {
+              "textContent": "={{ $json.resources.slice(0, 1900) }}"
+            },
+            {
+              "type": "heading_2",
+              "textContent": "Pull Quotes"
+            },
+            {
+              "textContent": "={{ $json.pullQuotes.slice(0, 1900) }}"
+            },
+            {
+              "type": "heading_2",
+              "textContent": "Blog Draft"
+            },
+            {
+              "textContent": "={{ $json.blogDraft.slice(0, 1900) }}"
+            },
+            {
+              "textContent": "={{ $json.blogDraft.slice(1900, 3800) }}"
+            },
+            {
+              "textContent": "={{ $json.blogDraft.slice(3800, 5700) }}"
+            },
+            {
+              "textContent": "={{ $json.blogDraft.slice(5700, 7600) }}"
+            },
+            {
+              "type": "heading_2",
+              "textContent": "Transcript Excerpt"
+            },
+            {
+              "textContent": "={{ $(\"Extract Transcript Data\").item.json.transcript.slice(0, 1900) }}"
+            },
+            {
+              "textContent": "={{ $(\"Extract Transcript Data\").item.json.transcript.slice(1900, 3800) }}"
+            },
+            {
+              "textContent": "={{ $(\"Extract Transcript Data\").item.json.transcript.slice(3800, 5700) }}"
+            },
+            {
+              "textContent": "={{ $(\"Extract Transcript Data\").item.json.transcript.slice(5700, 7600) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "51ab7c96-65a9-48d1-a1cd-61c7a19d781e",
+      "name": "Create Notion Episode Page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2512,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REPLACE_WITH_YOUR_SLACK_CHANNEL_ID",
+          "cachedResultName": "contentrepurposing"
+        },
+        "text": "=*Podcast content ready* - {{ $(\"Normalize Episode\").item.json.episodeTitle }}\n\n*Duration:* {{ $(\"Extract Transcript Data\").item.json.durationMin }} min  |  *Transcript:* {{ $(\"Extract Transcript Data\").item.json.wordCount }} words  |  *Speakers:* {{ $(\"Extract Transcript Data\").item.json.speakerCount }}  |  *Confidence:* {{ Math.round($(\"Extract Transcript Data\").item.json.confidence * 100) }}%\n*Processed in:* {{ $(\"Assemble Notion Payload\").item.json.processingSeconds }}s\n\n*Assets:* 250-word summary, 5-point exec summary, timestamped show notes, LinkedIn post, X thread, Facebook post, Instagram caption, 10 pull quotes, SEO blog draft, keywords and metadata\n\n<{{ $json.url }}|Open in Notion>",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "mrkdwn": true
+        }
+      },
+      "id": "2ed4558d-c864-4598-911a-28e233a2f982",
+      "name": "Notify Content Ready",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        2720,
+        112
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "webhookId": "c6c73fb5-39b9-42f5-a6d7-dada8edf5a5a",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REPLACE_WITH_YOUR_SLACK_CHANNEL_ID",
+          "cachedResultName": "contentrepurposing"
+        },
+        "text": "=:rotating_light: *Podcast pipeline failed*\n\n*Episode:* {{ $(\"Normalize Episode\").item.json.episodeTitle }}\n*Execution:* {{ $execution.id }}\n*Error:* {{ $json.error ?? $json.message ?? $json.status ?? \"Unknown failure\" }}\n\nThe episode was not written to Notion. Re-run this execution after resolving the cause.",
+        "otherOptions": {
+          "includeLinkToWorkflow": true,
+          "mrkdwn": true
+        }
+      },
+      "id": "39f00353-1e77-48a2-86fe-c905a3b6c3b4",
+      "name": "Alert Pipeline Failure",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        1184,
+        560
+      ],
+      "webhookId": "f83b9b89-4dc0-4feb-9b58-26e2347a76f3",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## 1. Ingest\n\nRSS Feed Trigger is the production path - swap feedUrl for the client feed.\n\nManual Test Run plus Load Sample Episode gives an identical payload shape for testing without waiting for a new episode. The sample points at a real public AssemblyAI test file.",
+        "width": 740,
+        "color": 4
+      },
+      "id": "4e389b3a-093e-472b-9093-0e8a6fad08e9",
+      "name": "Sticky Note bfb40789",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -928,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2. Transcribe (async)\n\nAssemblyAI takes the audio URL directly - no download, no binary, no file size ceiling.\n\nSubmit returns a job id, then Wait 45s and poll. Transcription State loops back on any status other than completed or error, so long episodes simply take more laps.\n\nspeaker_labels and auto_chapters are what give us diarization and the timestamped outline used for show notes.",
+        "height": 200,
+        "width": 960,
+        "color": 3
+      },
+      "id": "ce5f91f4-f75b-400f-a86a-1535af450469",
+      "name": "Sticky Note d01834e6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3. Generate\n\nThree separate chains rather than one mega-prompt: each has its own schema, its own failure surface, and can be re-run or swapped independently.\n\nAll three share one GPT-5.4 model node. Each uses a Structured Output Parser so downstream mapping never string-parses prose.",
+        "height": 200,
+        "width": 960,
+        "color": 5
+      },
+      "id": "ec873252-e8bf-4809-8dd5-a737a5b783aa",
+      "name": "Sticky Note 1f270fa0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        912,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4. Persist and notify\n\nNotion rich_text properties cap at 2000 chars, so short assets go in properties and long-form goes in page blocks, sliced across several paragraphs.\n\nTranscript is stored as an excerpt of about 7600 chars. See README for the block-append loop that removes this limit.",
+        "height": 200,
+        "width": 740,
+        "color": 6
+      },
+      "id": "1787c1c8-a8eb-4dcc-bd28-1369a2201ff0",
+      "name": "Sticky Note dca47c19",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Failure paths\n\nEvery fallible node has retries and an error output. Failures converge here rather than killing the run silently.\n\n- Invalid RSS data goes to skipped and alerted, never transcribed\n- Submit, poll, or transcription error alerts with the execution id\n- Notion write failure alerts after 3 retries\n\nA separate Error Trigger workflow catches anything uncaught.",
+        "height": 200,
+        "width": 1200,
+        "color": 2
+      },
+      "id": "5202d6b6-390e-4d5e-a7e5-748e62e5bbd3",
+      "name": "Sticky Note 65bd7a12",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        224,
+        784
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "New Podcast Episode": {
+      "main": [
+        [
+          {
+            "node": "Normalize Episode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Episode": {
+      "main": [
+        [
+          {
+            "node": "Episode Has Audio?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Test Run": {
+      "main": [
+        [
+          {
+            "node": "Load Sample Episode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Sample Episode": {
+      "main": [
+        [
+          {
+            "node": "Normalize Episode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Episode Has Audio?": {
+      "main": [
+        [
+          {
+            "node": "Submit Transcription Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Invalid Episode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit Transcription Job": {
+      "main": [
+        [
+          {
+            "node": "Wait For Transcription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Transcription": {
+      "main": [
+        [
+          {
+            "node": "Poll Transcription Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Transcription Status": {
+      "main": [
+        [
+          {
+            "node": "Transcription State?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcription State?": {
+      "main": [
+        [
+          {
+            "node": "Extract Transcript Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait For Transcription",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Transcript Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Summaries and Show Notes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Summaries and Show Notes": {
+      "main": [
+        [
+          {
+            "node": "Generate Social Content",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT 5.4 Content Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Summaries and Show Notes",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Generate Social Content",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Generate SEO and Blog",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Summaries and Show Notes",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Social Content": {
+      "main": [
+        [
+          {
+            "node": "Generate SEO and Blog",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Social Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate Social Content",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate SEO and Blog": {
+      "main": [
+        [
+          {
+            "node": "Assemble Notion Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEO Schema": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Generate SEO and Blog",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Notion Payload": {
+      "main": [
+        [
+          {
+            "node": "Create Notion Episode Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Notion Episode Page": {
+      "main": [
+        [
+          {
+            "node": "Notify Content Ready",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert Pipeline Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

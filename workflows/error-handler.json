@@ -1,0 +1,156 @@
+{
+  "name": "Podcast Pipeline Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "082517e0-ad36-4b6b-98ef-eae9b60f5a9d",
+      "name": "Pipeline Error Caught",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e-wf",
+              "name": "workflowName",
+              "value": "={{ $json.workflow?.name ?? \"Unknown workflow\" }}",
+              "type": "string"
+            },
+            {
+              "id": "e-node",
+              "name": "failedNode",
+              "value": "={{ $json.execution?.lastNodeExecuted ?? \"Unknown node\" }}",
+              "type": "string"
+            },
+            {
+              "id": "e-msg",
+              "name": "errorMessage",
+              "value": "={{ ($json.execution?.error?.message ?? \"No message\").toString().slice(0, 800) }}",
+              "type": "string"
+            },
+            {
+              "id": "e-url",
+              "name": "executionUrl",
+              "value": "={{ $json.execution?.url ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "e-mode",
+              "name": "runMode",
+              "value": "={{ $json.execution?.mode ?? \"unknown\" }}",
+              "type": "string"
+            },
+            {
+              "id": "e-cat",
+              "name": "category",
+              "value": "={{ /429|rate.?limit/i.test($json.execution?.error?.message ?? \"\") ? \"Rate limit\" : /timeout|ETIMEDOUT|ECONNRESET/i.test($json.execution?.error?.message ?? \"\") ? \"Timeout or network\" : /401|403|unauthor|forbidden/i.test($json.execution?.error?.message ?? \"\") ? \"Auth or credential\" : /notion/i.test($json.execution?.lastNodeExecuted ?? \"\") ? \"Notion write\" : \"Unclassified\" }}",
+              "type": "string"
+            },
+            {
+              "id": "e-act",
+              "name": "suggestedAction",
+              "value": "={{ /429|rate.?limit/i.test($json.execution?.error?.message ?? \"\") ? \"Back off and re-run. Consider raising Wait interval or lowering concurrency.\" : /timeout|ETIMEDOUT|ECONNRESET/i.test($json.execution?.error?.message ?? \"\") ? \"Transient. Re-run the execution. If repeated, raise the node timeout.\" : /401|403|unauthor|forbidden/i.test($json.execution?.error?.message ?? \"\") ? \"Check the credential on the failing node. Token may be expired or lacking scope.\" : \"Open the execution and inspect the failing node input.\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "90fe8750-730b-4aa5-b35c-267b188a9158",
+      "name": "Classify Failure",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        48,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "REPLACE_WITH_YOUR_SLACK_CHANNEL_ID",
+          "cachedResultName": "contentrepurposing"
+        },
+        "text": "=:bangbang: *Uncaught failure in {{ $json.workflowName }}*\n\n*Failed node:* {{ $json.failedNode }}\n*Category:* {{ $json.category }}\n*Run mode:* {{ $json.runMode }}\n\n*Error:*\n```{{ $json.errorMessage }}```\n\n*Suggested action:* {{ $json.suggestedAction }}\n\n<{{ $json.executionUrl }}|Open the failed execution>",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "mrkdwn": true
+        }
+      },
+      "id": "b704bc88-20a5-4952-a820-24818399d674",
+      "name": "Alert Uncaught Failure",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        288,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "webhookId": "d070886e-fb9b-4ce8-9e76-96d64ad48dcf",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## Global error handler\n\nThis workflow is the safety net for anything the main pipeline does NOT catch on its own error branches - node crashes, expression failures, out-of-memory, or a node with no error output wired.\n\n**To arm it:** open Podcast to Content Pipeline, go to Settings, and set Error Workflow to this workflow. Without that setting this never fires.\n\nClassify Failure buckets the error by message pattern so the Slack alert carries a suggested next step instead of a raw stack trace.",
+        "height": 264,
+        "width": 780,
+        "color": 2
+      },
+      "id": "9e17d112-9a03-4e55-b904-0f07f46c2d38",
+      "name": "Sticky Note 7d710794",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        16
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Pipeline Error Caught": {
+      "main": [
+        [
+          {
+            "node": "Classify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Failure": {
+      "main": [
+        [
+          {
+            "node": "Alert Uncaught Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "nodeGroups": [],
+  "tags": []
+}

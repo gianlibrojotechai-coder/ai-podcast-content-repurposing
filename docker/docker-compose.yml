@@ -1,0 +1,105 @@
+# Podcast to Content Pipeline - n8n stack
+# Usage: cp .env.example .env && docker compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published to the host - only n8n needs to reach it.
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '5678:5678'
+    environment:
+      # --- Database ---
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # --- Identity / URLs ---
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+
+      # --- Security ---
+      # Losing this key makes every stored credential permanently unreadable.
+      # Back it up somewhere other than this machine.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_SECURE_COOKIE: 'true'
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'true'
+
+      # --- Binary data ---
+      # filesystem keeps large payloads out of Postgres. This pipeline sends
+      # AssemblyAI a URL rather than downloading audio, so binary volume is low
+      # today - but this is the setting that matters if a download path is added.
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+
+      # --- Execution retention ---
+      # Transcripts are large and live in execution data. Without pruning the
+      # database grows by roughly the transcript size on every run.
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_PROGRESS: 'true'
+      EXECUTIONS_DATA_PRUNE: 'true'
+      EXECUTIONS_DATA_MAX_AGE: 336        # hours (14 days)
+      EXECUTIONS_DATA_PRUNE_MAX_COUNT: 10000
+
+      # --- Timeouts ---
+      # The Wait/poll loop can legitimately run for many minutes on a long
+      # episode. Keep the ceiling generous.
+      EXECUTIONS_TIMEOUT: 3600
+      EXECUTIONS_TIMEOUT_MAX: 7200
+
+      # --- Queue mode (uncomment with the redis service below) ---
+      # EXECUTIONS_MODE: queue
+      # QUEUE_BULL_REDIS_HOST: redis
+      # QUEUE_HEALTH_CHECK_ACTIVE: 'true'
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  # --- Optional: queue mode ---
+  # Enable past ~10 concurrent episodes. The pipeline holds no in-memory state
+  # between nodes, so it scales horizontally without modification.
+  #
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+  #
+  # n8n-worker:
+  #   image: docker.n8n.io/n8nio/n8n:latest
+  #   restart: unless-stopped
+  #   command: worker
+  #   depends_on: [n8n, redis]
+  #   environment:
+  #     # Must match the main n8n service exactly, including the encryption key.
+  #     <<: *n8n-env
+  #   deploy:
+  #     replicas: 3
+
+volumes:
+  postgres_data:
+  n8n_data:
+  # redis_data:
